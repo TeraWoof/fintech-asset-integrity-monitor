@@ -1,28 +1,50 @@
-1. Header & Vision
-# Fintech Asset Integrity Monitor
-A high-performance monitoring engine designed for institutional digital asset management. This system ensures mandate compliance and real-time risk mitigation through automated price-drift detection.
+SCRYPT // Asset Integrity Monitor
+A high-frequency financial surveillance dashboard built to monitor digital asset volatility and market integrity in real-time. This project demonstrates a robust full-stack architecture capable of handling intensive data throughput with low-latency visualization.
 
-2. The Problem (Contexto de Negócio)
-Aqui ligas ao que a SCRYPT faz.
+##Key Features
+High-Frequency Data Ingestion: Consumes live multi-stream WebSockets from Binance using Python's asyncio.
 
-Institutional investors require 24/7 oversight of their assets. Manual monitoring is prone to human error and latency. This solution automates the detection of "Mandate Breaches" (e.g., unexpected price drops) to protect Assets Under Management (AUM).
+GIL-Bypassing Risk Engine: Utilizes a dedicated multiprocessing worker to perform heavy quantitative calculations (Drift/Volatility) without blocking the I/O event loop.
 
-3. Key Features
-Real-time Ingestion: Async WebSocket integration with Tier-1 exchanges.
+Atomic State Management: Powered by Zustand, ensuring that only the specific asset card receiving data re-renders, maintaining 60 FPS performance.
 
-Risk Engine: Automated calculation of price volatility and drift using Python/Pandas.
+Data Virtualization: Implements react-virtuoso to efficiently render large lists of assets by only processing elements within the viewport.
 
-Institutional Dashboard: High-performance React UI with atomic state updates.
+Real-time Visual Analytics: Integrated Recharts sparklines for immediate trend analysis and automated "Breach Alerts" for volatility management.
 
-Audit Trail: Every breach is logged with millisecond precision for compliance reporting.
+##Tech Stack
+Backend (Engine)
+Language: Python 3.11+
 
-4. Tech Stack & Architecture Decisions
-Esta é a parte onde justificas as tuas escolhas (o CISO vai ler isto com atenção).
+Framework: FastAPI
 
-Backend (Python/FastAPI): Chosen for its superior data processing capabilities and async I/O performance.
+Concurrency: AsyncIO (Networking) + Multiprocessing (Computation)
 
-Frontend (Next.js/Zustand): Implemented to ensure zero-lag rendering during high-frequency data updates.
+Math: NumPy (Vectorized calculations)
 
-Reliability: Integrated Pydantic models for strict data validation, preventing "garbage-in, garbage-out" scenarios.
+Communication: Secure WebSockets
 
-5. Quick Start (How to run)
+Frontend (Dashboard)
+Framework: Next.js (App Router)
+
+Styling: Tailwind CSS (Cyberpunk/Institutional Dark Theme)
+
+State: Zustand (Atomic slices)
+
+Charts: Recharts / D3.js
+
+List Rendering: React Virtuoso
+
+##Architecture Overview
+The system follows a Producer-Consumer pattern to ensure maximum stability under load:
+
+The Producer: An asynchronous task connects to exchange feeds and pushes raw ticks into a synchronized multiprocessing.Queue.
+
+The Consumer (Risk Engine): A separate OS process pulls from the queue, uses NumPy to calculate the price drift over a rolling window, and updates a shared memory state.
+
+The API/WS Layer: FastAPI broadcasts the processed risk metrics to the React frontend every second.
+
+##Integrity & Safety
+Pydantic Validation: All incoming and outgoing data is strictly typed to ensure portfolio integrity.
+
+Error Resilience: Implementation of optional chaining and defensive coding to handle WebSocket handshakes and null states gracefully.
