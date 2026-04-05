@@ -91,7 +91,6 @@ export default function Home() {
             <div className="flex items-center justify-center gap-4 text-red-500 text-[11px] font-black uppercase tracking-[0.4em]">
               <span className="animate-bounce">⚠️</span>
               CRITICAL: ASSET VOLATILITY BREACHED DEFINED MANDATE
-              <span className="animate-bounce">⚠️</span>
             </div>
           </div>
         )}

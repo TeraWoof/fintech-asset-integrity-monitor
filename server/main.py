@@ -3,34 +3,25 @@ import json
 import websockets
 import logging
 import numpy as np
-from multiprocessing import Process, Queue
+from multiprocessing import Process, Queue, Manager
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from pydantic import BaseModel, ValidationError
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query
+from pydantic import BaseModel
 from collections import deque
 
-# Logging configuration
+# --- CONFIGURATION & LOGGING ---
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-# Shared local memory for latest asset data (in-memory cache)
-#In production for scalability, consider Redis or similar for shared state across instances, we could use TimeSeriesDB for historical data.
-assets_latest_data = {}
 
 class PriceUpdate(BaseModel):
     symbol: str
     price: float
     drift: float = 0.0
 
-def risk_engine_worker(input_queue: Queue, output_dict: dict):
-    """
-    Worker isolado num processo próprio para bypassar o GIL.
-    Usa NumPy para cálculos vetorizados de alta performance.
-    """
+# --- QUANTITATIVE ENGINE ---
+def risk_engine_worker(input_queue: Queue, shared_dict: dict):
     local_buffers = {}
-    
     while True:
-        # Recieves data from the I/O process, performs heavy calculations, and updates the shared state for FastAPI to serve.
         item = input_queue.get()
         if item is None: break
         
@@ -39,94 +30,99 @@ def risk_engine_worker(input_queue: Queue, output_dict: dict):
             local_buffers[symbol] = deque(maxlen=100)
         
         local_buffers[symbol].append(price)
-        
-        # Numpy Vectorized Drift Calculation: Calcula o drift percentual entre o preço inicial e o atual, usando NumPy para performance O(1) mesmo com buffers grandes.
         data_array = np.array(local_buffers[symbol])
+        
         if len(data_array) > 1:
-            initial = data_array[0]
-            current = data_array[-1]
-            drift = ((current - initial) / initial) * 100
+            initial_price = data_array[0]
+            current_price = data_array[-1]
+            drift = ((current_price - initial_price) / initial_price) * 100
             
-            # Update shared state for FastAPI to serve to clients
-            output_dict[symbol] = {
-                "price": current,
+            shared_dict[symbol] = {
+                "price": current_price,
                 "drift": round(float(drift), 2)
             }
 
+# --- I/O LAYER ---
 async def fetch_binance_data(symbols: list, risk_queue: Queue):
-    """
-    Consumidor assíncrono otimizado para I/O sem bloqueio.
-    """
+    # Convert list to Binance stream format
     streams = "/".join([f"{s.lower()}@ticker" for s in symbols])
     uri = f"wss://stream.binance.com:9443/ws/{streams}"
 
     while True:
         try:
             async with websockets.connect(uri, ping_interval=20) as binance_ws:
-                logger.info(f"📡 High-Performance Feed Established: {symbols}")
+                logger.info(f"📡 Feed Active for Dynamic Subscription: {symbols}")
                 while True:
-                    raw_data = await binance_ws.recv()
-                    data = json.loads(raw_data)
-                    
+                    raw_message = await binance_ws.recv()
+                    data = json.loads(raw_message)
                     if isinstance(data, dict) and 's' in data and 'c' in data:
-                        # Offloading: we send only the necessary data to the Risk Engine, minimizing IPC overhead.
                         risk_queue.put((data['s'], float(data['c'])))
-                                
         except Exception as e:
-            logger.error(f"🔄 Socket Error: {e}. Reconnecting...")
+            logger.error(f"🔄 Reconnecting due to: {e}")
             await asyncio.sleep(5)
 
 # --- FASTAPI LIFESPAN ---
-
-# Dictionary shared between processes to hold the latest price and drift data for each symbol, allowing FastAPI to serve this data efficiently without blocking on calculations.
-from multiprocessing import Manager
-manager = Manager()
-shared_assets_data = manager.dict()
-risk_input_queue = Queue()
+shared_assets_data = None
+risk_input_queue = None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # 1. Start the Risk Engine worker process that will handle all heavy computations in isolation, allowing FastAPI to remain responsive and serve data with minimal latency.
-    quant_process = Process(
-        target=risk_engine_worker, 
-        args=(risk_input_queue, shared_assets_data)
-    )
+    global shared_assets_data, risk_input_queue
+    manager = Manager()
+    shared_assets_data = manager.dict()
+    risk_input_queue = Queue()
+
+    quant_process = Process(target=risk_engine_worker, args=(risk_input_queue, shared_assets_data))
     quant_process.start()
     
-    # 2. Initialise the Binance WebSocket feed in an asynchronous task, which will continuously fetch data and send it to the Risk Engine via the queue. 
-    # This design ensures that the I/O operations do not block the main thread, allowing FastAPI to serve client requests concurrently.
-    target_assets = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT"]
-    io_task = asyncio.create_task(fetch_binance_data(target_assets, risk_input_queue))
+    # We don't start the fetcher here anymore, as it's now dynamic per connection
+    yield 
     
-    yield
-    
-    io_task.cancel()
     risk_input_queue.put(None)
     quant_process.join()
 
 app = FastAPI(lifespan=lifespan)
 
+# --- DYNAMIC WEBSOCKET ENDPOINT ---
 @app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
+async def websocket_endpoint(
+    websocket: WebSocket, 
+    symbols: str = Query("BTCUSDT,ETHUSDT") # Default symbols if none provided
+):
+    """
+    Dynamic WebSocket: Subscription is based on the 'symbols' query parameter.
+    Example: ws://localhost:8000/ws?symbols=SOLUSDT,BNBUSDT
+    """
     await websocket.accept()
+    
+    # Parse symbols from query string
+    symbol_list = [s.strip().upper() for s in symbols.split(",")]
+    
+    # Start a dedicated fetcher task for THIS specific client connection
+    # In a massive scale app, you'd use a Pub/Sub (Redis) to avoid duplicated Binance connections
+    io_task = asyncio.create_task(fetch_binance_data(symbol_list, risk_input_queue))
+    
     try:
         while True:
-            payloads = []
-            # Read the latest data from the shared dictionary updated by the Risk Engine process and send it to the client. 
-            # This allows us to serve real-time updates with minimal latency, as FastAPI can read from the shared state without blocking on any heavy computations.
-            for symbol, data in shared_assets_data.items():
-                payloads.append(PriceUpdate(
-                    symbol=symbol,
-                    price=data["price"],
-                    drift=data["drift"]
-                ).model_dump())
+            # Filter the shared memory to only send data requested by this client
+            current_snapshot = list(shared_assets_data.items())
+            
+            payloads = [
+                PriceUpdate(symbol=symbol, price=data["price"], drift=data["drift"]).model_dump()
+                for symbol, data in current_snapshot if symbol in symbol_list
+            ]
             
             if payloads:
                 await websocket.send_json(payloads)
-            await asyncio.sleep(1)
+            
+            await asyncio.sleep(0.5) 
+            
     except WebSocketDisconnect:
-        pass
+        logger.info(f"❌ Client unsubscribed from: {symbol_list}")
+    finally:
+        io_task.cancel() # Critical: stop fetching Binance data for this client when they leave
 
 if __name__ == "__main__":
     import uvicorn
+    # Execution entry point for Uvicorn ASGI server
     uvicorn.run(app, host="0.0.0.0", port=8000)

@@ -12,7 +12,7 @@ interface CardProps {
 
 
 export function Card({ asset, isBreached }: CardProps) {
-  // Simulação de histórico para o Sparkline (idealmente viria do backend)
+  //simulate some historical data for the chart, in a real scenario this would come from the store's history buffer
   const chartData = Array.from({ length: 10 }, (_, i) => ({ value: asset.price + (Math.random() - 0.5) * 10 }));
 
   return (
