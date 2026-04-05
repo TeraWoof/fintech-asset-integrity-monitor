@@ -1,3 +1,4 @@
+import os
 import asyncio
 import json
 import websockets
@@ -124,5 +125,7 @@ async def websocket_endpoint(
 
 if __name__ == "__main__":
     import uvicorn
-    # Execution entry point for Uvicorn ASGI server
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    # O Railway injeta automaticamente a variável PORT
+    port = int(os.environ.get("PORT", 8000)) 
+    logger.info(f"🚀 Servidor a iniciar na porta {port}")
+    uvicorn.run(app, host="0.0.0.0", port=port)
