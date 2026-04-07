@@ -88,12 +88,8 @@ app = FastAPI(lifespan=lifespan)
 @app.websocket("/ws")
 async def websocket_endpoint(
     websocket: WebSocket, 
-    symbols: str = Query("BTCUSDT,ETHUSDT") # Default symbols if none provided
+    symbols: str = Query("BTCUSDT,ETHUSDT,BNBUSDT,SOLUSDT") # Default symbols if none provided
 ):
-    """
-    Dynamic WebSocket: Subscription is based on the 'symbols' query parameter.
-    Example: ws://localhost:8000/ws?symbols=SOLUSDT,BNBUSDT
-    """
     await websocket.accept()
     
     # Parse symbols from query string
@@ -125,7 +121,6 @@ async def websocket_endpoint(
 
 if __name__ == "__main__":
     import uvicorn
-    # O Railway injeta automaticamente a variável PORT
     port = int(os.environ.get("PORT", 8000)) 
     logger.info(f"🚀 Servidor a iniciar na porta {port}")
     uvicorn.run(app, host="0.0.0.0", port=port)
