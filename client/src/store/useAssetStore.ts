@@ -9,7 +9,7 @@ interface Asset {
 
 interface AssetStore {
   assets: Asset[];
-  updateAssets: (newData: { symbol: string; price: number; drift: number }[]) => void;
+  updateAssets: (newData: { symbol: string; price: number; drift: number, history: number[] }[]) => void;
 }
 
 export const useAssetStore = create<AssetStore>((set) => ({
