@@ -7,7 +7,7 @@ export const useCryptoSocket = () => {
 
   useEffect(() => {
     // Defining the WebSocket connection to the backend feed
-    const socket = new WebSocket('ws://127.0.0.1:5000/ws'); // usualy we add the links in our .env file, but for simplicity, we are hardcoding it here
+    const socket = new WebSocket('wss://fintech-poc.onrender.com/ws'); // usualy we add the links in our .env file, but for simplicity, we are hardcoding it here
 
     socket.onmessage = (event) => {
       try {
