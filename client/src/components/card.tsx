@@ -1,62 +1,83 @@
-
-import { LineChart, Line, ResponsiveContainer, YAxis } from 'recharts';
+import { LineChart, Line, ResponsiveContainer, YAxis } from "recharts";
 
 interface CardProps {
-    asset: {
-        symbol: string;
-        price: number;
-        drift: number;
-    };
-    isBreached: boolean;
+  asset: {
+    symbol: string;
+    price: number;
+    drift: number;
+    history: number[];
+  };
+  isBreached: boolean;
 }
 
-
 export function Card({ asset, isBreached }: CardProps) {
-  //simulate some historical data for the chart, in a real scenario this would come from the store's history buffer
-  const chartData = Array.from({ length: 10 }, (_, i) => ({ value: asset.price + (Math.random() - 0.5) * 10 }));
+  const chartData = asset.history.map((price, index) => ({
+    time: index, // this could be a timestamp in a real scenario
+    value: price,
+  }));
 
   return (
-    <div className={`relative p-4 border transition-all duration-500 ${
-      isBreached 
-        ? "border-red-500 bg-red-950/10 shadow-[0_0_15px_rgba(239,68,68,0.2)]" 
-        : "border-slate-800 bg-slate-900/50 hover:border-slate-600"
-    }`}>
+    <div
+      className={`relative p-4 border transition-all duration-500 ${
+        isBreached
+          ? "border-red-500 bg-red-950/10 shadow-[0_0_15px_rgba(239,68,68,0.2)]"
+          : "border-slate-800 bg-slate-900/50 hover:border-slate-600"
+      }`}
+    >
       <div className="flex justify-between items-start mb-4">
         <div>
-          <p className="text-[10px] text-slate-500 uppercase tracking-widest">Asset Pair</p>
-          <h3 className="text-lg font-bold text-white tracking-tighter">{asset.symbol}</h3>
+          <p className="text-[10px] text-slate-500 uppercase tracking-widest">
+            Asset Pair
+          </p>
+          <h3 className="text-lg font-bold text-white tracking-tighter">
+            {asset.symbol}
+          </h3>
         </div>
-        <div className={`text-[10px] px-2 py-0.5 rounded-sm border ${
-          isBreached ? "border-red-500 text-red-500" : "border-emerald-500/50 text-emerald-500"
-        }`}>
+        <div
+          className={`text-[10px] px-2 py-0.5 rounded-sm border ${
+            isBreached
+              ? "border-red-500 text-red-500"
+              : "border-emerald-500/50 text-emerald-500"
+          }`}
+        >
           {isBreached ? "CRITICAL" : "STABLE"}
         </div>
       </div>
       <div className="grid grid-cols-2 gap-4 mb-4">
         <div>
-          <p className="text-[9px] text-slate-500 uppercase">Spot Price (USD)</p>
+          <p className="text-[9px] text-slate-500 uppercase">
+            Spot Price (USD)
+          </p>
           <p className="text-xl font-mono font-bold text-emerald-400">
-            ${asset.price?.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+            $
+            {asset.price?.toLocaleString(undefined, {
+              minimumFractionDigits: 2,
+            })}
           </p>
         </div>
         <div className="text-right">
-          <p className="text-[9px] text-slate-500 uppercase">Volatility Drift</p>
-          <p className={`text-xl font-mono font-bold ${asset.drift >= 0 ? "text-emerald-500" : "text-red-500"}`}>
-            {asset.drift > 0 ? "+" : ""}{asset.drift}%
+          <p className="text-[9px] text-slate-500 uppercase">
+            Volatility Drift
+          </p>
+          <p
+            className={`text-xl font-mono font-bold ${asset.drift >= 0 ? "text-emerald-500" : "text-red-500"}`}
+          >
+            {asset.drift > 0 ? "+" : ""}
+            {asset.drift}%
           </p>
         </div>
       </div>
       <div className="h-12 w-full opacity-50">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={chartData}>
-            <YAxis hide domain={['auto', 'auto']} />
-            <Line 
-              type="monotone" 
-              dataKey="value" 
-              stroke={isBreached ? "#ef4444" : "#10b981"} 
-              strokeWidth={1.5} 
-              dot={false} 
-              isAnimationActive={false} 
+            <YAxis hide domain={["auto", "auto"]} />
+            <Line
+              type="monotone"
+              dataKey="value"
+              stroke={isBreached ? "#ef4444" : "#10b981"}
+              strokeWidth={1.5}
+              dot={false}
+              isAnimationActive={false}
             />
           </LineChart>
         </ResponsiveContainer>
